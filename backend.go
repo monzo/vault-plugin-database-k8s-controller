@@ -2,14 +2,16 @@ package database
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"net/rpc"
+	"os"
 	"strings"
 	"sync"
 
-	log "github.com/hashicorp/go-hclog"
-
 	"github.com/hashicorp/errwrap"
+	log "github.com/hashicorp/go-hclog"
 	uuid "github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/vault/sdk/database/dbplugin"
 	"github.com/hashicorp/vault/sdk/database/helper/dbutil"
@@ -18,6 +20,8 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/strutil"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/hashicorp/vault/sdk/queue"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
 )
 
 const (
@@ -61,6 +65,35 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 	b.cancelQueue = cancel
 	// Load queue and kickoff new periodic ticker
 	go b.initQueue(ictx, conf)
+
+	flags := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	klog.InitFlags(flags)
+	// I hate that this is the only way to configure klog. This is needed because writing to stderr seems to cause
+	// deadlock, possibly because you're conflicting with hclog.
+	if err := flags.Parse([]string{"--logtostderr=false", "--stderrthreshold=fatal"}); err != nil {
+		return nil, err
+	}
+
+	klogger := conf.Logger.Named("klog")
+	klog.SetOutput(klogger.StandardWriter(&log.StandardLoggerOptions{ForceLevel: log.Debug}))
+
+	kubeconfig, err := b.kubeconfig(ctx, conf.StorageView)
+	if err != nil {
+		// don't kill startup, otherwise we won't get an opportunity to fix the config
+		conf.Logger.Error("Error loading kubeconfig: %v", err)
+		return b, nil
+	}
+
+	if kubeconfig != nil {
+		stop, err := b.watchServiceAccounts(kubeconfig)
+		if err != nil {
+			conf.Logger.Error("Error creating client to watch service accounts: %v", err)
+			return b, nil
+		}
+
+		b.stopWatch = stop
+	}
+
 	return b, nil
 }
 
@@ -76,6 +109,7 @@ func Backend(conf *logical.BackendConfig) *databaseBackend {
 			SealWrapStorage: []string{
 				"config/*",
 				"static-role/*",
+				kubeconfigPath,
 			},
 		},
 		Paths: framework.PathAppend(
@@ -88,6 +122,7 @@ func Backend(conf *logical.BackendConfig) *databaseBackend {
 			pathRoles(&b),
 			pathCredsCreate(&b),
 			pathRotateCredentials(&b),
+			pathKubeconfig(&b),
 		),
 
 		Secrets: []*framework.Secret{
@@ -96,12 +131,15 @@ func Backend(conf *logical.BackendConfig) *databaseBackend {
 		Clean:       b.clean,
 		Invalidate:  b.invalidate,
 		BackendType: logical.TypeLogical,
+
+		PeriodicFunc: b.syncServiceAccounts,
 	}
 
 	b.logger = conf.Logger
 	b.connections = make(map[string]*dbPluginInstance)
 
 	b.roleLocks = locksutil.CreateLocks()
+	b.saCache = cache.NewStore(keyFunc)
 
 	return &b
 }
@@ -126,6 +164,10 @@ type databaseBackend struct {
 	// concurrent requests are not modifying the same role and possibly causing
 	// issues with the priority queue.
 	roleLocks []*locksutil.LockEntry
+
+	saCache   cache.Store
+	stopWatch func()
+	stopMtx   sync.Mutex
 }
 
 func (b *databaseBackend) DatabaseConfig(ctx context.Context, s logical.Storage, name string) (*DatabaseConfig, error) {
@@ -160,6 +202,56 @@ type upgradeCheck struct {
 	Statements *upgradeStatements `json:"statments,omitempty"`
 }
 
+// getKubernetesRoleEntry should be called if a role is prefixed with k8s_ and is not found in storage.
+// In this case, we should look up the underlying concrete role eg rw in k8s_rw_s-ledger_default, and
+// then look up the appropriate service account to interpolate its annotation into the creation statements.
+func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string) (*roleEntry, error) {
+	// turn k8s_rw_default_s-ledger into [k8s, rw, s-ledger, default]
+	subs := strings.SplitN(name, "_", 4)
+	if len(subs) < 4 {
+		return nil, errors.New("k8s role name is malformed; must be in format k8s_role_namespace_service-account-name")
+	}
+
+	roleName, svcAccountName, namespace := subs[1], subs[2], subs[3]
+
+	role, err := b.Role(ctx, s, roleName)
+	if err != nil {
+		return nil, err
+	}
+
+	if role == nil {
+		return nil, nil
+	}
+
+	annotation, err := b.getServiceAccountAnnotation(ctx, s, namespace, svcAccountName)
+	if err != nil {
+		return nil, err
+	}
+
+	if annotation == "" {
+		// no service account with an annotation found
+		return nil, nil
+	}
+
+	transformation := map[string]string{
+		"annotation": annotation,
+	}
+
+	var transformedStatements []string
+
+	for _, statement := range role.Statements.Creation {
+		transformedStatements = append(transformedStatements, dbutil.QueryHelper(statement, transformation))
+	}
+
+	role.Statements.Creation = transformedStatements
+
+	// For backwards compatibility, copy the transformed value back into the string form
+	// of the field
+	role.Statements.CreationStatements = strings.Join(role.Statements.Creation, ";")
+
+	return role, nil
+}
+
 func (b *databaseBackend) Role(ctx context.Context, s logical.Storage, roleName string) (*roleEntry, error) {
 	return b.roleAtPath(ctx, s, roleName, databaseRolePath)
 }
@@ -174,6 +266,9 @@ func (b *databaseBackend) roleAtPath(ctx context.Context, s logical.Storage, rol
 		return nil, err
 	}
 	if entry == nil {
+		if strings.HasPrefix(roleName, "k8s_") {
+			return b.getKubernetesRoleEntry(ctx, s, roleName)
+		}
 		return nil, nil
 	}
 
@@ -247,7 +342,11 @@ func (b *databaseBackend) GetConnection(ctx context.Context, s logical.Storage, 
 		return nil, err
 	}
 
-	dbp, err := dbplugin.PluginFactory(ctx, config.PluginName, b.System(), b.logger)
+	// We have to create a custom plugin lookup mock, as plugins can't look up other plugins
+	// We instead just manually pack all the builtin database plugins into this binary
+	looker := &mockPluginLooker{}
+
+	dbp, err := dbplugin.PluginFactory(ctx, config.PluginName, looker, b.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -337,6 +436,12 @@ func (b *databaseBackend) clean(ctx context.Context) {
 		db.Close()
 	}
 	b.connections = make(map[string]*dbPluginInstance)
+
+	b.stopMtx.Lock()
+	defer b.stopMtx.Unlock()
+	if b.stopWatch != nil {
+		b.stopWatch()
+	}
 }
 
 const backendHelp = `

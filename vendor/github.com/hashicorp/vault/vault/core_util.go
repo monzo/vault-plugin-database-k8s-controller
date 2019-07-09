@@ -6,10 +6,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/hashicorp/vault/helper/license"
 	"github.com/hashicorp/vault/helper/namespace"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/physical"
+	"github.com/hashicorp/vault/sdk/helper/license"
+	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/hashicorp/vault/sdk/physical"
+	"github.com/hashicorp/vault/vault/cluster"
 	"github.com/hashicorp/vault/vault/replication"
 	cache "github.com/patrickmn/go-cache"
 )
@@ -110,6 +111,8 @@ func (c *Core) invalidateSentinelPolicy(PolicyType, string) {}
 
 func (c *Core) removePerfStandbySecondary(context.Context, string) {}
 
+func (c *Core) removeAllPerfStandbySecondaries() {}
+
 func (c *Core) perfStandbyClusterHandler() (*replication.Cluster, *cache.Cache, chan struct{}, error) {
-	return nil, cache.New(2*HeartbeatInterval, 1*time.Second), make(chan struct{}), nil
+	return nil, cache.New(2*cluster.HeartbeatInterval, 1*time.Second), make(chan struct{}), nil
 }

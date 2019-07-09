@@ -9,7 +9,7 @@ import (
 
 	proto "github.com/golang/protobuf/proto"
 	"github.com/hashicorp/errwrap"
-	"github.com/hashicorp/vault/physical"
+	"github.com/hashicorp/vault/sdk/physical"
 	"github.com/hashicorp/vault/vault/seal"
 )
 
@@ -38,6 +38,10 @@ func NewAutoSeal(lowLevel seal.Access) Seal {
 	ret.barrierConfig.Store((*SealConfig)(nil))
 	ret.recoveryConfig.Store((*SealConfig)(nil))
 	return ret
+}
+
+func (d *autoSeal) GetAccess() seal.Access {
+	return d.Access
 }
 
 func (d *autoSeal) checkCore() error {
