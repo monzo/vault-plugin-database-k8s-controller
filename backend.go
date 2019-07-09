@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/rpc"
 	"strings"
@@ -123,7 +124,61 @@ type upgradeCheck struct {
 	Statements *upgradeStatements `json:"statments,omitempty"`
 }
 
+func (b *databaseBackend) getServiceAccountAnnotations(ctx context.Context, namespace, svcAccountName string) ([]string, error) {
+	return []string{"foo", "bar"}, nil
+}
+
+func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string) (*roleEntry, error) {
+	// turn k8s_default_s-ledger into [k8s, default, s-ledger]
+	subs := strings.SplitN(name, "_", 3)
+	if len(subs) < 3 {
+		return nil, errors.New("k8s role name is malformed; must be in format k8s_namespace_service-account-name")
+	}
+
+	namespace, svcAccountName := subs[1], subs[2]
+
+	role, err := b.Role(ctx, s, "k8s")
+	if err != nil {
+		return nil, err
+	}
+
+	if role == nil {
+		return nil, nil
+	}
+
+	annotations, err := b.getServiceAccountAnnotations(ctx, namespace, svcAccountName)
+	if err != nil {
+		return nil, err
+	}
+
+	var transformedStatements []string
+
+	// if a statement containts {{annotation}}, we recreate the statement once per annotation value
+	for _, statement := range role.Statements.Creation {
+		if !strings.Contains(statement, "{{annotation}}") {
+			transformedStatements = append(transformedStatements, statement)
+			continue
+		}
+
+		for _, annotation := range annotations {
+			transformedStatements = append(transformedStatements,
+				dbutil.QueryHelper(statement, map[string]string{
+					"annotation": annotation,
+				}),
+			)
+		}
+	}
+
+	role.Statements.Creation = transformedStatements
+
+	return role, nil
+}
+
 func (b *databaseBackend) Role(ctx context.Context, s logical.Storage, roleName string) (*roleEntry, error) {
+	if strings.HasPrefix(roleName, "k8s_") {
+		return b.getKubernetesRoleEntry(ctx, s, roleName)
+	}
+
 	entry, err := s.Get(ctx, "role/"+roleName)
 	if err != nil {
 		return nil, err
