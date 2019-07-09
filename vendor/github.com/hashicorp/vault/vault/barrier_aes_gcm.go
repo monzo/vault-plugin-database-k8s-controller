@@ -15,10 +15,10 @@ import (
 
 	metrics "github.com/armon/go-metrics"
 	"github.com/hashicorp/errwrap"
-	"github.com/hashicorp/vault/helper/jsonutil"
-	"github.com/hashicorp/vault/helper/strutil"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/physical"
+	"github.com/hashicorp/vault/sdk/helper/jsonutil"
+	"github.com/hashicorp/vault/sdk/helper/strutil"
+	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/hashicorp/vault/sdk/physical"
 )
 
 const (
@@ -287,6 +287,7 @@ func (b *AESGCMBarrier) ReloadKeyring(ctx context.Context) error {
 	}
 
 	// Setup the keyring and finish
+	b.cache = make(map[uint32]cipher.AEAD)
 	b.keyring = keyring
 	return nil
 }

@@ -10,10 +10,10 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
-	"github.com/hashicorp/vault/helper/hclutil"
 	"github.com/hashicorp/vault/helper/identity"
 	"github.com/hashicorp/vault/helper/namespace"
-	"github.com/hashicorp/vault/helper/parseutil"
+	"github.com/hashicorp/vault/sdk/helper/hclutil"
+	"github.com/hashicorp/vault/sdk/helper/parseutil"
 	"github.com/mitchellh/copystructure"
 )
 
@@ -281,7 +281,8 @@ func parsePaths(result *Policy, list *ast.ObjectList, performTemplating bool, en
 
 		// Check the path
 		if performTemplating {
-			_, templated, err := identity.PopulateString(&identity.PopulateStringInput{
+			_, templated, err := identity.PopulateString(identity.PopulateStringInput{
+				Mode:      identity.ACLTemplating,
 				String:    key,
 				Entity:    entity,
 				Groups:    groups,
@@ -292,7 +293,8 @@ func parsePaths(result *Policy, list *ast.ObjectList, performTemplating bool, en
 			}
 			key = templated
 		} else {
-			hasTemplating, _, err := identity.PopulateString(&identity.PopulateStringInput{
+			hasTemplating, _, err := identity.PopulateString(identity.PopulateStringInput{
+				Mode:              identity.ACLTemplating,
 				ValidityCheckOnly: true,
 				String:            key,
 			})

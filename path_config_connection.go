@@ -281,8 +281,12 @@ func (b *databaseBackend) connectionWriteHandler() framework.OperationFunc {
 		delete(data.Raw, "verify_connection")
 		delete(data.Raw, "root_rotation_statements")
 
+		// We have to create a custom plugin lookup mock, as plugins can't look up other plugins
+		// We instead just manually pack all the builtin database plugins into this binary
+		looker := &mockPluginLooker{}
+
 		// Create a database plugin and initialize it.
-		db, err := dbplugin.PluginFactory(ctx, config.PluginName, b.System(), b.logger)
+		db, err := dbplugin.PluginFactory(ctx, config.PluginName, looker, b.logger)
 		if err != nil {
 			return logical.ErrorResponse(fmt.Sprintf("error creating database object: %s", err)), nil
 		}

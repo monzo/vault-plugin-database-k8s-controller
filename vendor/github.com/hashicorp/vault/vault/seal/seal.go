@@ -3,7 +3,7 @@ package seal
 import (
 	"context"
 
-	"github.com/hashicorp/vault/physical"
+	"github.com/hashicorp/vault/sdk/physical"
 )
 
 const (
@@ -13,6 +13,7 @@ const (
 	AWSKMS        = "awskms"
 	GCPCKMS       = "gcpckms"
 	AzureKeyVault = "azurekeyvault"
+	OCIKMS        = "ocikms"
 	Transit       = "transit"
 	Test          = "test-auto"
 
