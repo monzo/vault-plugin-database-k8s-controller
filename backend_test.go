@@ -1079,6 +1079,158 @@ func TestBackend_roleCrud(t *testing.T) {
 		t.Fatal("Expected response to be nil")
 	}
 }
+
+func TestBackend_k8sRoleCrud(t *testing.T) {
+	cluster, sys := getCluster(t)
+	defer cluster.Cleanup()
+
+	config := logical.TestBackendConfig()
+	config.StorageView = &logical.InmemStorage{}
+	config.System = sys
+
+	lb, err := Factory(context.Background(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, ok := lb.(*databaseBackend)
+	if !ok {
+		t.Fatal("could not convert to db backend")
+	}
+	defer b.Cleanup(context.Background())
+
+	cleanup, connURL := preparePostgresTestContainer(t, config.StorageView, b)
+	defer cleanup()
+
+	// Configure a connection
+	data := map[string]interface{}{
+		"connection_url": connURL,
+		"plugin_name":    "postgresql-database-plugin",
+	}
+	req := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "config/plugin-test",
+		Storage:   config.StorageView,
+		Data:      data,
+	}
+	resp, err := b.HandleRequest(namespace.RootContext(nil), req)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%s resp:%#v\n", err, resp)
+	}
+
+	// persist a service account -> annotation mapping
+	entry, err := logical.StorageEntryJSON("serviceaccount/default/s-ledger", "public")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := config.StorageView.Put(namespace.RootContext(nil), entry); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test role creation
+	{
+		data = map[string]interface{}{
+			"db_name":               "plugin-test",
+			"creation_statements":   testK8SRole,
+			"revocation_statements": defaultRevocationSQL,
+			"default_ttl":           "5m",
+			"max_ttl":               "10m",
+		}
+		req = &logical.Request{
+			Operation: logical.CreateOperation,
+			Path:      "roles/rw",
+			Storage:   config.StorageView,
+			Data:      data,
+		}
+		resp, err = b.HandleRequest(namespace.RootContext(nil), req)
+		if err != nil || (resp != nil && resp.IsError()) {
+			t.Fatalf("err:%s resp:%#v\n", err, resp)
+		}
+
+		exists, err := b.pathRoleExistenceCheck()(context.Background(), req, &framework.FieldData{
+			Raw:    data,
+			Schema: pathRoles(b).Fields,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Fatal("expected not exists")
+		}
+
+		// Read the dynamic role
+		data = map[string]interface{}{}
+		req = &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      "roles/k8s_rw_s-ledger_default",
+			Storage:   config.StorageView,
+			Data:      data,
+		}
+		resp, err = b.HandleRequest(namespace.RootContext(nil), req)
+		if err != nil || (resp != nil && resp.IsError()) {
+			t.Fatalf("err:%s resp:%#v\n", err, resp)
+		}
+
+		expected := dbplugin.Statements{
+			Creation:   []string{strings.TrimSpace(testRole)},
+			Revocation: []string{strings.TrimSpace(defaultRevocationSQL)},
+			Rollback:   []string{},
+			Renewal:    []string{},
+		}
+
+		actual := dbplugin.Statements{
+			Creation:   resp.Data["creation_statements"].([]string),
+			Revocation: resp.Data["revocation_statements"].([]string),
+			Rollback:   resp.Data["rollback_statements"].([]string),
+			Renewal:    resp.Data["renew_statements"].([]string),
+		}
+
+		if diff := deep.Equal(expected, actual); diff != nil {
+			t.Fatal(diff)
+		}
+
+		if diff := deep.Equal(resp.Data["db_name"], "plugin-test"); diff != nil {
+			t.Fatal(diff)
+		}
+		if diff := deep.Equal(resp.Data["default_ttl"], float64(300)); diff != nil {
+			t.Fatal(diff)
+		}
+		if diff := deep.Equal(resp.Data["max_ttl"], float64(600)); diff != nil {
+			t.Fatal(diff)
+		}
+	}
+
+	// Delete the role
+	data = map[string]interface{}{}
+	req = &logical.Request{
+		Operation: logical.DeleteOperation,
+		Path:      "roles/plugin-role-test",
+		Storage:   config.StorageView,
+		Data:      data,
+	}
+	resp, err = b.HandleRequest(namespace.RootContext(nil), req)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%s resp:%#v\n", err, resp)
+	}
+
+	// Read the role
+	data = map[string]interface{}{}
+	req = &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "roles/plugin-role-test",
+		Storage:   config.StorageView,
+		Data:      data,
+	}
+	resp, err = b.HandleRequest(namespace.RootContext(nil), req)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%s resp:%#v\n", err, resp)
+	}
+
+	// Should be empty
+	if resp != nil {
+		t.Fatal("Expected response to be nil")
+	}
+}
+
 func TestBackend_allowedRoles(t *testing.T) {
 	cluster, sys := getCluster(t)
 	defer cluster.Cleanup()
@@ -1429,6 +1581,14 @@ CREATE ROLE "{{name}}" WITH
   PASSWORD '{{password}}'
   VALID UNTIL '{{expiration}}';
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "{{name}}";
+`
+
+const testK8SRole = `
+CREATE ROLE "{{name}}" WITH
+  LOGIN
+  PASSWORD '{{password}}'
+  VALID UNTIL '{{expiration}}';
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA {{annotation}} TO "{{name}}";
 `
 
 const defaultRevocationSQL = `
