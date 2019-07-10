@@ -62,7 +62,6 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 		}
 	}
 
-
 	return b, nil
 }
 
@@ -143,7 +142,9 @@ type upgradeCheck struct {
 	Statements *upgradeStatements `json:"statments,omitempty"`
 }
 
-
+// getKubernetesRoleEntry should be called if a role is prefixed with k8s_ and is not found in storage.
+// In this case, we should look up the underlying concrete role eg rw in k8s_rw_default_s-ledger, and
+// then look up the appropriate service account to interpolate its annotation into the creation statements.
 func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string) (*roleEntry, error) {
 	// turn k8s_rw_default_s-ledger into [k8s, rw, default, s-ledger]
 	subs := strings.SplitN(name, "_", 4)

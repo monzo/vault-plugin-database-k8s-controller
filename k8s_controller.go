@@ -19,7 +19,7 @@ import (
 
 var annotationKey = "monzo.com/keyspace"
 
-var saCache cache.Store
+var saCache = cache.NewStore(keyFunc)
 
 // watchServiceAccounts is called on plugin start and attempts to maintain an
 // in-memory cache of all service accounts.
@@ -38,8 +38,6 @@ func watchServiceAccounts(kubeconfig string) error {
 
 	lw := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "serviceaccounts", "", fields.Everything())
 
-	saCache = cache.NewStore(keyFunc)
-
 	reflector := cache.NewReflector(lw, &v1.ServiceAccount{}, saCache, time.Hour)
 
 	stopCh := make(chan struct{})
@@ -48,6 +46,8 @@ func watchServiceAccounts(kubeconfig string) error {
 	return nil
 }
 
+// keyFunc is very similar to cache.MetaNamespaceKeyFunc except when
+// there's no namespace specified it uses "default"
 func keyFunc(obj interface{}) (string, error) {
 	meta, err := meta.Accessor(obj)
 	if err != nil {
@@ -60,8 +60,11 @@ func keyFunc(obj interface{}) (string, error) {
 }
 
 const nameRegexStr = `^[\w.]+$`
+
 var nameRegex = regexp.MustCompile(nameRegexStr)
 
+// getAnnotationForObj pulls the configured annotation key out of a k8s object,
+// checking it against a fairly restrictive regex to avoid injection
 func getAnnotationForObj(obj interface{}) (string, error) {
 	meta, err := meta.Accessor(obj)
 	if err != nil {
@@ -87,6 +90,10 @@ func getAnnotationForObj(obj interface{}) (string, error) {
 	return "", nil
 }
 
+// getServiceAccountAnnotation tries two strategies to find the annotation value for a service account.
+// First it tries to read the service account out of the reflector cache. However this may not be populated
+// if the plugin just started. If not found there, it reads Vault storage in case the plugin has ever synced
+// this service account before and stored it persistently.
 func getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespace, svcAccountName string) (string, error) {
 	// first try from the cache
 	sa, exists, err := saCache.GetByKey(path.Join(namespace, svcAccountName))
@@ -122,11 +129,11 @@ func getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespa
 // and stores this mapping durably in Vault. This allows us to load it immediately on plugin start.
 // Vault should call this function every minute.
 func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
-	if saCache == nil {
+	sas := saCache.List()
+
+	if len(sas) == 0 {
 		return nil
 	}
-
-	sas := saCache.List()
 
 	klog.Infof("Syncing %d service accounts", len(sas))
 	for _, sa := range sas {
