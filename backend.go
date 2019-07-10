@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/klog"
 	"net/rpc"
 	"strings"
 	"sync"
@@ -11,7 +12,7 @@ import (
 	log "github.com/hashicorp/go-hclog"
 
 	"github.com/hashicorp/errwrap"
-	uuid "github.com/hashicorp/go-uuid"
+	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/vault/builtin/logical/database/dbplugin"
 	"github.com/hashicorp/vault/helper/strutil"
 	"github.com/hashicorp/vault/logical"
@@ -47,6 +48,21 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 	if err := b.Setup(ctx, conf); err != nil {
 		return nil, err
 	}
+
+	if kubeconfig, ok := conf.Config["kubeconfig"]; ok {
+		conf.Logger.Info("kubeconfig provided; will watch for Kubernetes service accounts")
+
+		if key, ok := conf.Config["annotation_key"]; ok {
+			annotationKey = key
+		}
+
+		klog.SetOutput(conf.Logger.StandardWriter(&log.StandardLoggerOptions{}))
+		if err := watchServiceAccounts(kubeconfig); err != nil {
+			return nil, err
+		}
+	}
+
+
 	return b, nil
 }
 
@@ -77,10 +93,13 @@ func Backend(conf *logical.BackendConfig) *databaseBackend {
 		Clean:       b.closeAllDBs,
 		Invalidate:  b.invalidate,
 		BackendType: logical.TypeLogical,
+
+		PeriodicFunc: syncServiceAccounts,
 	}
 
 	b.logger = conf.Logger
 	b.connections = make(map[string]*dbPluginInstance)
+
 	return &b
 }
 
@@ -124,20 +143,17 @@ type upgradeCheck struct {
 	Statements *upgradeStatements `json:"statments,omitempty"`
 }
 
-func (b *databaseBackend) getServiceAccountAnnotations(ctx context.Context, namespace, svcAccountName string) ([]string, error) {
-	return []string{"foo", "bar"}, nil
-}
 
 func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string) (*roleEntry, error) {
-	// turn k8s_default_s-ledger into [k8s, default, s-ledger]
-	subs := strings.SplitN(name, "_", 3)
-	if len(subs) < 3 {
-		return nil, errors.New("k8s role name is malformed; must be in format k8s_namespace_service-account-name")
+	// turn k8s_rw_default_s-ledger into [k8s, rw, default, s-ledger]
+	subs := strings.SplitN(name, "_", 4)
+	if len(subs) < 4 {
+		return nil, errors.New("k8s role name is malformed; must be in format k8s_role_namespace_service-account-name")
 	}
 
-	namespace, svcAccountName := subs[1], subs[2]
+	roleName, namespace, svcAccountName := subs[1], subs[2], subs[3]
 
-	role, err := b.Role(ctx, s, "k8s")
+	role, err := b.Role(ctx, s, roleName)
 	if err != nil {
 		return nil, err
 	}
@@ -146,27 +162,24 @@ func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.
 		return nil, nil
 	}
 
-	annotations, err := b.getServiceAccountAnnotations(ctx, namespace, svcAccountName)
+	annotation, err := getServiceAccountAnnotation(ctx, s, namespace, svcAccountName)
 	if err != nil {
 		return nil, err
 	}
 
+	if annotation == "" {
+		// no service account with an annotation found
+		return nil, nil
+	}
+
+	transformation := map[string]string{
+		"annotation": annotation,
+	}
+
 	var transformedStatements []string
 
-	// if a statement containts {{annotation}}, we recreate the statement once per annotation value
 	for _, statement := range role.Statements.Creation {
-		if !strings.Contains(statement, "{{annotation}}") {
-			transformedStatements = append(transformedStatements, statement)
-			continue
-		}
-
-		for _, annotation := range annotations {
-			transformedStatements = append(transformedStatements,
-				dbutil.QueryHelper(statement, map[string]string{
-					"annotation": annotation,
-				}),
-			)
-		}
+		transformedStatements = append(transformedStatements, dbutil.QueryHelper(statement, transformation))
 	}
 
 	role.Statements.Creation = transformedStatements
@@ -175,15 +188,14 @@ func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.
 }
 
 func (b *databaseBackend) Role(ctx context.Context, s logical.Storage, roleName string) (*roleEntry, error) {
-	if strings.HasPrefix(roleName, "k8s_") {
-		return b.getKubernetesRoleEntry(ctx, s, roleName)
-	}
-
 	entry, err := s.Get(ctx, "role/"+roleName)
 	if err != nil {
 		return nil, err
 	}
 	if entry == nil {
+		if strings.HasPrefix(roleName, "k8s_") {
+			return b.getKubernetesRoleEntry(ctx, s, roleName)
+		}
 		return nil, nil
 	}
 
