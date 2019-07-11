@@ -278,7 +278,11 @@ func (b *databaseBackend) GetConnection(ctx context.Context, s logical.Storage, 
 		return nil, err
 	}
 
-	dbp, err := dbplugin.PluginFactory(ctx, config.PluginName, b.System(), b.logger)
+	// We have to create a custom plugin lookup mock, as plugins can't look up other plugins
+	// We instead just manually pack all the builtin database plugins into this binary
+	looker := &mockPluginLooker{}
+
+	dbp, err := dbplugin.PluginFactory(ctx, config.PluginName, looker, b.logger)
 	if err != nil {
 		return nil, err
 	}
