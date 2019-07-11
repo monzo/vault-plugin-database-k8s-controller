@@ -4,20 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/klog"
 	"net/rpc"
 	"strings"
 	"sync"
 
-	log "github.com/hashicorp/go-hclog"
-
 	"github.com/hashicorp/errwrap"
+	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/vault/builtin/logical/database/dbplugin"
 	"github.com/hashicorp/vault/helper/strutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 	"github.com/hashicorp/vault/plugins/helper/database/dbutil"
+	"k8s.io/klog"
 )
 
 const databaseConfigPath = "database/config/"
@@ -49,17 +48,23 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 		return nil, err
 	}
 
-	if kubeconfig, ok := conf.Config["kubeconfig"]; ok {
-		conf.Logger.Info("kubeconfig provided; will watch for Kubernetes service accounts")
+	klog.SetOutput(conf.Logger.StandardWriter(&log.StandardLoggerOptions{}))
 
-		if key, ok := conf.Config["annotation_key"]; ok {
-			annotationKey = key
+	kubeconfig, err := kubeconfig(ctx, conf.StorageView)
+	if err != nil {
+		// don't kill startup, otherwise we won't get an opportunity to fix the config
+		conf.Logger.Error("Error loading kubeconfig: %v", err)
+		return b, nil
+	}
+
+	if kubeconfig != nil {
+		stop, err := watchServiceAccounts(kubeconfig)
+		if err != nil {
+			conf.Logger.Error("Error creating client to watch service accounts: %v", err)
+			return b, nil
 		}
 
-		klog.SetOutput(conf.Logger.StandardWriter(&log.StandardLoggerOptions{}))
-		if err := watchServiceAccounts(kubeconfig); err != nil {
-			return nil, err
-		}
+		b.stopWatch = stop
 	}
 
 	return b, nil
@@ -84,6 +89,7 @@ func Backend(conf *logical.BackendConfig) *databaseBackend {
 			pathCredsCreate(&b),
 			pathResetConnection(&b),
 			pathRotateCredentials(&b),
+			pathKubeconfig(&b),
 		},
 
 		Secrets: []*framework.Secret{
@@ -108,6 +114,8 @@ type databaseBackend struct {
 
 	*framework.Backend
 	sync.RWMutex
+
+	stopWatch func()
 }
 
 func (b *databaseBackend) DatabaseConfig(ctx context.Context, s logical.Storage, name string) (*DatabaseConfig, error) {

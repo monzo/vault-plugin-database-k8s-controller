@@ -4,36 +4,38 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/vault/logical"
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/fields"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
 	"path"
 	"regexp"
 	"time"
-)
 
-var annotationKey = "monzo.com/keyspace"
+	"github.com/hashicorp/vault/logical"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/fields"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
+)
 
 var saCache = cache.NewStore(keyFunc)
 
 // watchServiceAccounts is called on plugin start and attempts to maintain an
 // in-memory cache of all service accounts.
-func watchServiceAccounts(kubeconfig string) error {
-	kubeConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		&clientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		return err
+func watchServiceAccounts(kubeconfig *kubeConfig) (func(), error) {
+	klog.Info("kubeconfig provided; will watch for Kubernetes service accounts")
+
+	config := &rest.Config{
+		Host:        kubeconfig.Host,
+		BearerToken: kubeconfig.JWT,
+		TLSClientConfig: rest.TLSClientConfig{
+			CAData: []byte(kubeconfig.CACert),
+		},
 	}
 
-	client, err := clientset.NewForConfig(kubeConfig)
+	client, err := clientset.NewForConfig(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	lw := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "serviceaccounts", "", fields.Everything())
@@ -43,7 +45,9 @@ func watchServiceAccounts(kubeconfig string) error {
 	stopCh := make(chan struct{})
 	go reflector.Run(stopCh)
 
-	return nil
+	return func() {
+		close(stopCh)
+	}, nil
 }
 
 // keyFunc is very similar to cache.MetaNamespaceKeyFunc except when
@@ -65,7 +69,7 @@ var nameRegex = regexp.MustCompile(nameRegexStr)
 
 // getAnnotationForObj pulls the configured annotation key out of a k8s object,
 // checking it against a fairly restrictive regex to avoid injection
-func getAnnotationForObj(obj interface{}) (string, error) {
+func getAnnotationForObj(annotationKey string, obj interface{}) (string, error) {
 	meta, err := meta.Accessor(obj)
 	if err != nil {
 		return "", err
@@ -102,7 +106,14 @@ func getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespa
 	}
 
 	if exists {
-		return getAnnotationForObj(sa)
+		config, err := kubeconfig(ctx, s)
+		if err != nil {
+			return "", err
+		}
+
+		if config != nil {
+			return getAnnotationForObj(config.AnnotationKey, sa)
+		}
 	}
 
 	// now try from durable storage
@@ -135,9 +146,16 @@ func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
 		return nil
 	}
 
+	config, err := kubeconfig(ctx, req.Storage)
+	if err != nil {
+		return err
+	}
+
 	klog.Infof("Syncing %d service accounts", len(sas))
+
+	written := map[string]struct{}{}
 	for _, sa := range sas {
-		annotation, err := getAnnotationForObj(sa)
+		annotation, err := getAnnotationForObj(config.AnnotationKey, sa)
 		if err != nil {
 			klog.Errorf("error getting annotation for object: %s", err)
 			continue
@@ -163,8 +181,26 @@ func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
 			return err
 		}
 
-		klog.Infof("wrote to path %s", entry.Key)
+		written[entry.Key] = struct{}{}
 	}
+
+	// we should also delete any service accounts that no longer have the annotation
+	keys, err := logical.CollectKeysWithPrefix(ctx, req.Storage, "config/serviceaccount/")
+	if err != nil {
+		return err
+	}
+
+	var deleted int
+	for _, k := range keys {
+		if _, ok := written[k]; !ok {
+			if err := req.Storage.Delete(ctx, k); err != nil {
+				return err
+			}
+			deleted++
+		}
+	}
+
+	klog.Infof("wrote %d service accounts to storage, deleted %d", len(written), deleted)
 
 	return nil
 }
