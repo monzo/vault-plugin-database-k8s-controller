@@ -117,7 +117,7 @@ func getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespa
 	}
 
 	// now try from durable storage
-	key := path.Join("config", "serviceaccount", namespace, svcAccountName)
+	key := path.Join("serviceaccount", namespace, svcAccountName)
 	entry, err := s.Get(ctx, key)
 	if err != nil {
 		return "", err
@@ -170,8 +170,8 @@ func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
 			return err
 		}
 
-		// store in config/serviceaccount/default/s-ledger
-		entry, err := logical.StorageEntryJSON(path.Join("config", "serviceaccount", key), annotation)
+		// store in serviceaccount/default/s-ledger
+		entry, err := logical.StorageEntryJSON(path.Join("serviceaccount", key), annotation)
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
 	}
 
 	// we should also delete any service accounts that no longer have the annotation
-	keys, err := logical.CollectKeysWithPrefix(ctx, req.Storage, "config/serviceaccount/")
+	keys, err := logical.CollectKeysWithPrefix(ctx, req.Storage, "serviceaccount/")
 	if err != nil {
 		return err
 	}

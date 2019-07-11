@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-const configPath string = "config/kubernetes"
+const configPath string = "kubeconfig"
 
 // pathKubeconfig returns configuration for Kubernetes
 func pathKubeconfig(b *databaseBackend) *framework.Path {
