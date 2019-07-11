@@ -2,6 +2,14 @@
 
 
 [[projects]]
+  digest = "1:3d3a509c5ba327e8573bb57f9da8430c63a46a06886eb1d2ffc8af4e76f31c72"
+  name = "cloud.google.com/go"
+  packages = ["civil"]
+  pruneopts = "UT"
+  revision = "cf81fad90a1a1de334c4fc27e23eb9a4224b627a"
+  version = "v0.41.0"
+
+[[projects]]
   branch = "master"
   digest = "1:6da51e5ec493ad2b44cb04129e2d0a068c8fb9bd6cb5739d199573558696bb94"
   name = "github.com/Azure/go-ansiterm"
@@ -42,6 +50,21 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "cd527374f1e5bff4938207604a14f2e38a9cf512"
+
+[[projects]]
+  digest = "1:7e34f1cfe7ae2f3ae8a96c61763fcd30f6fba11090d951b7fb422d7cf064d97d"
+  name = "github.com/SAP/go-hdb"
+  packages = [
+    "driver",
+    "driver/sqltrace",
+    "internal/bufio",
+    "internal/protocol",
+    "internal/unicode",
+    "internal/unicode/cesu8",
+  ]
+  pruneopts = "UT"
+  revision = "8a55c0fb15fcfec2756d987b90c8fa47cb7a8f64"
+  version = "v0.14.1"
 
 [[projects]]
   branch = "master"
@@ -89,6 +112,17 @@
   pruneopts = "UT"
   revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
   version = "v1.1.1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:fe530312c9dbc69029583d0dfd97b15a3400fb10c0d9ac57857f3172b418d4f6"
+  name = "github.com/denisenkom/go-mssqldb"
+  packages = [
+    ".",
+    "internal/cp",
+  ]
+  pruneopts = "UT"
+  revision = "29e7b2419f38bdfd7dcd59b41fe3123444a69ca1"
 
 [[projects]]
   digest = "1:4ec8504b68b75f562efc4b291cba33194f88eaa4e68d9fc449e5b7ca68539329"
@@ -186,6 +220,19 @@
   version = "v1.0.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:beaca9d116fe3a5cc7a38843718bba83535df58c00fd848909b98ace520bcc67"
+  name = "github.com/gocql/gocql"
+  packages = [
+    ".",
+    "internal/lru",
+    "internal/murmur",
+    "internal/streams",
+  ]
+  pruneopts = "UT"
+  revision = "55a38e15c5db050d4bbe96061a31cbe2d661fa3e"
+
+[[projects]]
   digest = "1:a7534feda0f15b5fd691e59e4fb6b7547e27df4b415a62e02c7cb71b3439c1b1"
   name = "github.com/gogo/protobuf"
   packages = [
@@ -250,6 +297,14 @@
   pruneopts = "UT"
   revision = "e73c7ec21d36ddb0711cb36d1502d18363b5c2c9"
   version = "v0.3.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:364b908b9b27b97ab838f2f6f1b1f46281fa29b978a037d72a9b1d4f6d940190"
+  name = "github.com/hailocab/go-hostpool"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e80d13ce29ede4452c43dea11e79b9bc8a15b478"
 
 [[projects]]
   digest = "1:0ade334594e69404d80d9d323445d2297ff8161637f9b2d347cc6973d2d6f05b"
@@ -377,7 +432,7 @@
   revision = "65a6292f0157eff210d03ed1bf6c59b190b8b906"
 
 [[projects]]
-  digest = "1:59e73e78c3b347a1dcdb562a6a6e8ed664e25e9e8b721c943918c0a4bfe510e2"
+  digest = "1:45d757d26d14996b689da33cbaaebd48a9ee5f3e0c831a5f8b7a2e47f962963f"
   name = "github.com/hashicorp/vault"
   packages = [
     "api",
@@ -422,6 +477,11 @@
     "physical",
     "physical/inmem",
     "plugins",
+    "plugins/database/cassandra",
+    "plugins/database/hana",
+    "plugins/database/influxdb",
+    "plugins/database/mongodb",
+    "plugins/database/mssql",
     "plugins/database/mysql",
     "plugins/database/postgresql",
     "plugins/helper/database/connutil",
@@ -446,12 +506,16 @@
   revision = "2f1d1f20f75d5404f53b9edf6b53ed5505508675"
 
 [[projects]]
-  digest = "1:a0cefd27d12712af4b5018dc7046f245e1e3b5760e2e848c30b171b570708f9b"
-  name = "github.com/imdario/mergo"
-  packages = ["."]
+  digest = "1:3c6faaeb500b7e6fadbe52c0b3fd62b6eed7801ed0d74bb3bd9577017df8d2f4"
+  name = "github.com/influxdata/influxdb"
+  packages = [
+    "client/v2",
+    "models",
+    "pkg/escape",
+  ]
   pruneopts = "UT"
-  revision = "7c29201646fa3de8506f701213473dd407f19646"
-  version = "v0.3.7"
+  revision = "f8fdf652f348fc9980997fe1c972e2b79ddd13b0"
+  version = "v1.7.7"
 
 [[projects]]
   digest = "1:aa162c457e53f3d6ffebc922cb908c1ec014b67c9d8638a9fe6ed63034123c82"
@@ -698,15 +762,7 @@
   version = "v1.4.2"
 
 [[projects]]
-  digest = "1:c1b1102241e7f645bc8e0c22ae352e8f0dc6484b6cb4d132fa9f24174e0119e2"
-  name = "github.com/spf13/pflag"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "298182f68c66c05229eb03ac171abe6e309ee79a"
-  version = "v1.0.3"
-
-[[projects]]
-  digest = "1:2026bcd8001084d88a03fee03a4fd0b6642a03f71d852e85855e1858f692ea09"
+  digest = "1:a501ec050ffeececfe946a0ed7a37427f3cb69f8cc3294ad04def30694b5846d"
   name = "golang.org/x/crypto"
   packages = [
     "blake2b",
@@ -715,6 +771,7 @@
     "ed25519/internal/edwards25519",
     "internal/chacha20",
     "internal/subtle",
+    "md4",
     "pbkdf2",
     "poly1305",
     "ssh",
@@ -864,6 +921,20 @@
   version = "v0.9.1"
 
 [[projects]]
+  branch = "v2"
+  digest = "1:988de7520a09024d5d94cd99bd545afbf194893994ec759b1cda0a0bbb6adb80"
+  name = "gopkg.in/mgo.v2"
+  packages = [
+    ".",
+    "bson",
+    "internal/json",
+    "internal/sasl",
+    "internal/scram",
+  ]
+  pruneopts = "UT"
+  revision = "9856a29383ce1c59f308dd1cf0363a79b5bef6b5"
+
+[[projects]]
   digest = "1:9593bab40e981b1f90b7e07faeab0d09b75fe338880d08880f986a9d3283c53f"
   name = "gopkg.in/square/go-jose.v2"
   packages = [
@@ -978,7 +1049,7 @@
   revision = "4cfb76a8bf76b405d82fb36bc1c172d13ca86988"
 
 [[projects]]
-  digest = "1:cca866bb4ed9ca85a281c7a4b7b350536a115bd77a94c010b3cc475355f99628"
+  digest = "1:306c2778dcbaefaf87b20ff80f664478537fd48f4504dd2d5e4a6a68cc9e8aa5"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1027,12 +1098,8 @@
     "plugin/pkg/client/auth/exec",
     "rest",
     "rest/watch",
-    "tools/auth",
     "tools/cache",
-    "tools/clientcmd",
     "tools/clientcmd/api",
-    "tools/clientcmd/api/latest",
-    "tools/clientcmd/api/v1",
     "tools/metrics",
     "tools/pager",
     "tools/reference",
@@ -1040,7 +1107,6 @@
     "util/cert",
     "util/connrotation",
     "util/flowcontrol",
-    "util/homedir",
     "util/keyutil",
     "util/retry",
   ]
@@ -1080,42 +1146,40 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/armon/go-metrics",
     "github.com/fatih/structs",
     "github.com/go-test/deep",
-    "github.com/golang/protobuf/proto",
-    "github.com/golang/protobuf/ptypes",
-    "github.com/golang/protobuf/ptypes/timestamp",
     "github.com/hashicorp/errwrap",
     "github.com/hashicorp/go-hclog",
-    "github.com/hashicorp/go-plugin",
     "github.com/hashicorp/go-uuid",
     "github.com/hashicorp/vault/builtin/logical/database/dbplugin",
     "github.com/hashicorp/vault/helper/consts",
     "github.com/hashicorp/vault/helper/namespace",
     "github.com/hashicorp/vault/helper/pluginutil",
     "github.com/hashicorp/vault/helper/strutil",
+    "github.com/hashicorp/vault/helper/wrapping",
     "github.com/hashicorp/vault/http",
     "github.com/hashicorp/vault/logical",
     "github.com/hashicorp/vault/logical/framework",
     "github.com/hashicorp/vault/logical/plugin",
-    "github.com/hashicorp/vault/plugins",
+    "github.com/hashicorp/vault/plugins/database/cassandra",
+    "github.com/hashicorp/vault/plugins/database/hana",
+    "github.com/hashicorp/vault/plugins/database/influxdb",
+    "github.com/hashicorp/vault/plugins/database/mongodb",
+    "github.com/hashicorp/vault/plugins/database/mssql",
+    "github.com/hashicorp/vault/plugins/database/mysql",
     "github.com/hashicorp/vault/plugins/database/postgresql",
+    "github.com/hashicorp/vault/plugins/helper/database/credsutil",
     "github.com/hashicorp/vault/plugins/helper/database/dbutil",
     "github.com/hashicorp/vault/vault",
     "github.com/lib/pq",
     "github.com/mitchellh/mapstructure",
     "github.com/ory/dockertest",
-    "golang.org/x/net/context",
-    "google.golang.org/grpc",
-    "google.golang.org/grpc/codes",
-    "google.golang.org/grpc/status",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/fields",
     "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/rest",
     "k8s.io/client-go/tools/cache",
-    "k8s.io/client-go/tools/clientcmd",
     "k8s.io/klog",
   ]
   solver-name = "gps-cdcl"
