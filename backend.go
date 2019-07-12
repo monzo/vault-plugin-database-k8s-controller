@@ -193,6 +193,10 @@ func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.
 
 	role.Statements.Creation = transformedStatements
 
+	// For backwards compatibility, copy the transformed value back into the string form
+	// of the field
+	role.Statements.CreationStatements = strings.Join(role.Statements.Creation, ";")
+
 	return role, nil
 }
 
