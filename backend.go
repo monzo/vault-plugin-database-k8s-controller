@@ -151,16 +151,16 @@ type upgradeCheck struct {
 }
 
 // getKubernetesRoleEntry should be called if a role is prefixed with k8s_ and is not found in storage.
-// In this case, we should look up the underlying concrete role eg rw in k8s_rw_default_s-ledger, and
+// In this case, we should look up the underlying concrete role eg rw in k8s_rw_s-ledger_default, and
 // then look up the appropriate service account to interpolate its annotation into the creation statements.
 func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string) (*roleEntry, error) {
-	// turn k8s_rw_default_s-ledger into [k8s, rw, default, s-ledger]
+	// turn k8s_rw_default_s-ledger into [k8s, rw, s-ledger, default]
 	subs := strings.SplitN(name, "_", 4)
 	if len(subs) < 4 {
 		return nil, errors.New("k8s role name is malformed; must be in format k8s_role_namespace_service-account-name")
 	}
 
-	roleName, namespace, svcAccountName := subs[1], subs[2], subs[3]
+	roleName, svcAccountName, namespace := subs[1], subs[2], subs[3]
 
 	role, err := b.Role(ctx, s, roleName)
 	if err != nil {
