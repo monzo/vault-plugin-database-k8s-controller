@@ -15,15 +15,12 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
 )
-
-var saCache = cache.NewStore(keyFunc)
 
 // watchServiceAccounts is called on plugin start and attempts to maintain an
 // in-memory cache of all service accounts.
-func watchServiceAccounts(kubeconfig *kubeConfig) (func(), error) {
-	klog.Info("kubeconfig provided; will watch for Kubernetes service accounts")
+func (b *databaseBackend) watchServiceAccounts(kubeconfig *kubeConfig) (func(), error) {
+	b.logger.Info("kubeconfig provided; will watch for Kubernetes service accounts")
 
 	config := &rest.Config{
 		Host:        kubeconfig.Host,
@@ -40,12 +37,13 @@ func watchServiceAccounts(kubeconfig *kubeConfig) (func(), error) {
 
 	lw := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "serviceaccounts", "", fields.Everything())
 
-	reflector := cache.NewReflector(lw, &v1.ServiceAccount{}, saCache, time.Hour)
+	reflector := cache.NewReflector(lw, &v1.ServiceAccount{}, b.saCache, time.Hour)
 
 	stopCh := make(chan struct{})
 	go reflector.Run(stopCh)
 
 	return func() {
+		b.logger.Info("Closing reflector")
 		close(stopCh)
 	}, nil
 }
@@ -69,7 +67,7 @@ var nameRegex = regexp.MustCompile(nameRegexStr)
 
 // getAnnotationForObj pulls the configured annotation key out of a k8s object,
 // checking it against a fairly restrictive regex to avoid injection
-func getAnnotationForObj(annotationKey string, obj interface{}) (string, error) {
+func (b *databaseBackend) getAnnotationForObj(annotationKey string, obj interface{}) (string, error) {
 	meta, err := meta.Accessor(obj)
 	if err != nil {
 		return "", err
@@ -98,21 +96,21 @@ func getAnnotationForObj(annotationKey string, obj interface{}) (string, error) 
 // First it tries to read the service account out of the reflector cache. However this may not be populated
 // if the plugin just started. If not found there, it reads Vault storage in case the plugin has ever synced
 // this service account before and stored it persistently.
-func getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespace, svcAccountName string) (string, error) {
+func (b *databaseBackend) getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespace, svcAccountName string) (string, error) {
 	// first try from the cache
-	sa, exists, err := saCache.GetByKey(path.Join(namespace, svcAccountName))
+	sa, exists, err := b.saCache.GetByKey(path.Join(namespace, svcAccountName))
 	if err != nil {
 		return "", err
 	}
 
 	if exists {
-		config, err := kubeconfig(ctx, s)
+		config, err := b.kubeconfig(ctx, s)
 		if err != nil {
 			return "", err
 		}
 
 		if config != nil {
-			return getAnnotationForObj(config.AnnotationKey, sa)
+			return b.getAnnotationForObj(config.AnnotationKey, sa)
 		}
 	}
 
@@ -139,25 +137,25 @@ func getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespa
 // syncServiceAccounts lists all known service accounts to obtain a mapping of name to annotation
 // and stores this mapping durably in Vault. This allows us to load it immediately on plugin start.
 // Vault should call this function every minute.
-func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
-	sas := saCache.List()
+func (b *databaseBackend) syncServiceAccounts(ctx context.Context, req *logical.Request) error {
+	sas := b.saCache.List()
 
 	if len(sas) == 0 {
 		return nil
 	}
 
-	config, err := kubeconfig(ctx, req.Storage)
+	config, err := b.kubeconfig(ctx, req.Storage)
 	if err != nil {
 		return err
 	}
 
-	klog.Infof("Syncing %d service accounts", len(sas))
+	b.logger.Debug(fmt.Sprintf("Syncing %d service accounts", len(sas)))
 
 	written := map[string]struct{}{}
 	for _, sa := range sas {
-		annotation, err := getAnnotationForObj(config.AnnotationKey, sa)
+		annotation, err := b.getAnnotationForObj(config.AnnotationKey, sa)
 		if err != nil {
-			klog.Errorf("error getting annotation for object: %s", err)
+			b.logger.Error("error getting annotation for object: %s", err)
 			continue
 		}
 
@@ -200,7 +198,7 @@ func syncServiceAccounts(ctx context.Context, req *logical.Request) error {
 		}
 	}
 
-	klog.Infof("wrote %d service accounts to storage, deleted %d", len(written), deleted)
+	b.logger.Debug(fmt.Sprintf("wrote %d service accounts to storage, deleted %d", len(written), deleted))
 
 	return nil
 }

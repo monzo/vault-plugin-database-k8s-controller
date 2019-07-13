@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-const configPath string = "kubeconfig"
+const kubeconfigPath string = "kubeconfig"
 
 // pathKubeconfig returns configuration for Kubernetes
 func pathKubeconfig(b *databaseBackend) *framework.Path {
@@ -28,9 +28,8 @@ func pathKubeconfig(b *databaseBackend) *framework.Path {
 				DisplayName: "Kubernetes CA Certificate",
 			},
 			"jwt": {
-				Type: framework.TypeString,
-				Description: `A JWT used to access the
-K8S API to read service accounts.`,
+				Type:        framework.TypeString,
+				Description: "A JWT used to access the K8S API to read service accounts.",
 				DisplayName: "JWT",
 				Required:    true,
 			},
@@ -53,8 +52,8 @@ K8S API to read service accounts.`,
 }
 
 // kubeconfig takes a storage object and returns a kubeConfig object
-func kubeconfig(ctx context.Context, s logical.Storage) (*kubeConfig, error) {
-	raw, err := s.Get(ctx, configPath)
+func (b *databaseBackend) kubeconfig(ctx context.Context, s logical.Storage) (*kubeConfig, error) {
+	raw, err := s.Get(ctx, kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +72,7 @@ func kubeconfig(ctx context.Context, s logical.Storage) (*kubeConfig, error) {
 // pathConfigWrite handles create and update commands to the config
 func (b *databaseBackend) pathKubeconfigRead() framework.OperationFunc {
 	return func(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-		if config, err := kubeconfig(ctx, req.Storage); err != nil {
+		if config, err := b.kubeconfig(ctx, req.Storage); err != nil {
 			return nil, err
 		} else if config == nil {
 			return nil, nil
@@ -117,7 +116,7 @@ func (b *databaseBackend) pathKubeconfigWrite() framework.OperationFunc {
 			AnnotationKey: annotationKey,
 		}
 
-		entry, err := logical.StorageEntryJSON(configPath, config)
+		entry, err := logical.StorageEntryJSON(kubeconfigPath, config)
 		if err != nil {
 			return nil, err
 		}
@@ -126,14 +125,14 @@ func (b *databaseBackend) pathKubeconfigWrite() framework.OperationFunc {
 			return nil, err
 		}
 
-		b.Lock()
-		defer b.Unlock()
+		b.stopMtx.Lock()
+		defer b.stopMtx.Unlock()
 
 		if b.stopWatch != nil {
 			b.stopWatch()
 		}
 
-		stop, err := watchServiceAccounts(config)
+		stop, err := b.watchServiceAccounts(config)
 		if err != nil {
 			return nil, err
 		}
