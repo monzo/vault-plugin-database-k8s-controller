@@ -2,6 +2,9 @@
 A fork of Vault's database credential plugin allowing the use of an annotation on
 service accounts to dynamically specify user creation statements.
 
+Non-builtin database plugins are not supported, as sadly custom plugins cannot call out to other custom plugins.
+However, all of Vault's builtin database plugins are bundled into this binary and should work as normal.
+
 Currently based on https://github.com/hashicorp/vault/tree/v1.1.3/builtin/logical/database
 
 To rebase:
@@ -60,7 +63,7 @@ upstream.
 $ vault write database/roles/rw \
     db_name=my-cassandra-database \
     creation_statements="CREATE USER '{{username}}' WITH PASSWORD '{{password}}' NOSUPERUSER;" \
-    creation_statements="GRANT SELECT ON KEYSPACE \"{{annotation}}\" TO {{username}};" \
+    creation_statements="GRANT ALL PERMISSIONS ON KEYSPACE \"{{annotation}}\" TO {{username}};" \
     default_ttl="1h" \
     max_ttl="24h"
 Success! Data written to: database/roles/rw
@@ -71,7 +74,7 @@ kubectl annotate serviceaccount s-ledger monzo.com/keyspace='ledger'
 $ vault read database/roles/k8s_rw_s-ledger_default
 Key                      Value
 ---                      -----
-creation_statements      [CREATE USER '{{username}}' WITH PASSWORD '{{password}}' NOSUPERUSER; GRANT SELECT ON KEYSPACE "ledger" TO {{username}};]
+creation_statements      [CREATE USER '{{username}}' WITH PASSWORD '{{password}}' NOSUPERUSER; GRANT ALL PERMISSIONS ON KEYSPACE "ledger" TO {{username}};]
 db_name                  my-cassandra-database
 default_ttl              1h
 max_ttl                  24h
