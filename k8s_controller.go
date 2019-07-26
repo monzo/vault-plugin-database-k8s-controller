@@ -65,9 +65,9 @@ const nameRegexStr = `^[\w.]+$`
 
 var nameRegex = regexp.MustCompile(nameRegexStr)
 
-// getAnnotationForObj pulls the configured annotation key out of a k8s object,
+// getKeyspaceAnnotation pulls the configured annotation key out of a k8s object,
 // checking it against a fairly restrictive regex to avoid injection
-func (b *databaseBackend) getAnnotationForObj(annotationKey string, obj interface{}) (string, error) {
+func (b *databaseBackend) getKeyspaceAnnotation(annotationKey string, obj interface{}) (string, error) {
 	meta, err := meta.Accessor(obj)
 	if err != nil {
 		return "", err
@@ -110,7 +110,7 @@ func (b *databaseBackend) getServiceAccountAnnotation(ctx context.Context, s log
 		}
 
 		if config != nil {
-			return b.getAnnotationForObj(config.AnnotationKey, sa)
+			return b.getKeyspaceAnnotation(config.AnnotationKey, sa)
 		}
 	}
 
@@ -153,7 +153,7 @@ func (b *databaseBackend) syncServiceAccounts(ctx context.Context, req *logical.
 
 	written := map[string]struct{}{}
 	for _, sa := range sas {
-		annotation, err := b.getAnnotationForObj(config.AnnotationKey, sa)
+		annotation, err := b.getKeyspaceAnnotation(config.AnnotationKey, sa)
 		if err != nil {
 			b.logger.Error("error getting annotation for object: %s", err)
 			continue
