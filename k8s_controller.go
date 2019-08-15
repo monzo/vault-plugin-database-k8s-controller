@@ -65,52 +65,59 @@ const nameRegexStr = `^[\w.]+$`
 
 var nameRegex = regexp.MustCompile(nameRegexStr)
 
-// getKeyspaceAnnotation pulls the configured annotation key out of a k8s object,
+// getObjectAnnotations pulls the configured annotation key out of a k8s object,
 // checking it against a fairly restrictive regex to avoid injection
-func (b *databaseBackend) getKeyspaceAnnotation(annotationKey string, obj interface{}) (string, error) {
+func (b *databaseBackend) getObjectAnnotations(keyspaceKey, dbNameKey string, obj interface{}) (string, string, error) {
 	meta, err := meta.Accessor(obj)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	annotations := meta.GetAnnotations()
 
 	if annotations == nil {
-		return "", nil
+		return "", "", nil
 	}
 
-	if value, ok := annotations[annotationKey]; ok {
-		if len(value) > 0 {
-			if !nameRegex.MatchString(value) {
-				return "", errors.New(fmt.Sprintf("annotation %s did not match regex %s", value, nameRegexStr))
-			}
+	keyspace := annotations[keyspaceKey]
 
-			return value, nil
-		}
+	if len(keyspace) == 0 {
+		return "", "", nil
 	}
 
-	return "", nil
+	if !nameRegex.MatchString(keyspace) {
+		return "", "", errors.New(fmt.Sprintf("annotation %s did not match regex %s", keyspace, nameRegexStr))
+	}
+
+	dbName := annotations[keyspace]
+
+	return keyspace, dbName, nil
 }
 
-// getServiceAccountAnnotation tries two strategies to find the annotation value for a service account.
+// getServiceAccountAnnotations tries two strategies to find the annotation values for a service account.
 // First it tries to read the service account out of the reflector cache. However this may not be populated
 // if the plugin just started. If not found there, it reads Vault storage in case the plugin has ever synced
 // this service account before and stored it persistently.
-func (b *databaseBackend) getServiceAccountAnnotation(ctx context.Context, s logical.Storage, namespace, svcAccountName string) (string, error) {
+func (b *databaseBackend) getServiceAccountAnnotations(ctx context.Context, s logical.Storage, namespace, svcAccountName string) (string, string, error) {
 	// first try from the cache
 	sa, exists, err := b.saCache.GetByKey(path.Join(namespace, svcAccountName))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if exists {
 		config, err := b.kubeconfig(ctx, s)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		if config != nil {
-			return b.getKeyspaceAnnotation(config.AnnotationKey, sa)
+			keyspace, dbName, err := b.getObjectAnnotations(config.KeyspaceAnnotation, config.DBNameAnnotation, sa)
+			if err != nil {
+				return "", "", err
+			}
+
+			return keyspace, dbName, nil
 		}
 	}
 
@@ -118,20 +125,25 @@ func (b *databaseBackend) getServiceAccountAnnotation(ctx context.Context, s log
 	key := path.Join("serviceaccount", namespace, svcAccountName)
 	entry, err := s.Get(ctx, key)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if entry == nil {
-		return "", nil
+		return "", "", nil
 	}
 
-	var value string
+	var stored saCacheObject
 
-	if err := entry.DecodeJSON(&value); err != nil {
-		return "", err
+	if err := entry.DecodeJSON(&stored); err != nil {
+		return "", "", err
 	}
 
-	return value, nil
+	return stored.Keyspace, stored.DBName, nil
+}
+
+type saCacheObject struct {
+	Keyspace string
+	DBName   string
 }
 
 // syncServiceAccounts lists all known service accounts to obtain a mapping of name to annotation
@@ -153,15 +165,17 @@ func (b *databaseBackend) syncServiceAccounts(ctx context.Context, req *logical.
 
 	written := map[string]struct{}{}
 	for _, sa := range sas {
-		annotation, err := b.getKeyspaceAnnotation(config.AnnotationKey, sa)
+		keyspace, dbName, err := b.getObjectAnnotations(config.KeyspaceAnnotation, config.DBNameAnnotation, sa)
 		if err != nil {
 			b.logger.Error("error getting annotation for object: %s", err)
 			continue
 		}
 
-		if annotation == "" {
+		if keyspace == "" {
 			continue
 		}
+
+		toStore := saCacheObject{Keyspace: keyspace, DBName: dbName}
 
 		key, err := keyFunc(sa)
 		if err != nil {
@@ -169,7 +183,7 @@ func (b *databaseBackend) syncServiceAccounts(ctx context.Context, req *logical.
 		}
 
 		// store in serviceaccount/default/s-ledger
-		entry, err := logical.StorageEntryJSON(path.Join("serviceaccount", key), annotation)
+		entry, err := logical.StorageEntryJSON(path.Join("serviceaccount", key), toStore)
 		if err != nil {
 			return err
 		}

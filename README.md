@@ -36,8 +36,6 @@ service accounts in Kubernetes. If any service accounts contain an annotation
 stored in Vault. This is so that the mapping can be used before the cache is built from
 the k8s API.
 
-A custom annotation key can be provided on `secrets enable` with the option `annotation_key`
-
 The purpose of this is to interpolate this annotation into any creation statements of a role,
 to create essentially a dynamic role for every service account. If you provide a role named
 like `k8s_rw_s-ledger_default` *and this role does not explicitly exist* then instead the
@@ -46,6 +44,12 @@ plugin will look up the concrete role named `rw`, and will look up the service a
 
 It will then replace all instances of `{{annotation}}` in the creation statements of
 the concrete `rw` role with the value of the annotation on that service account.
+
+You can also set an annotation `monzo.com/cluster` which allows you to override the db name
+of the concrete `rw` role with the value of the annotation.
+
+Annotation keys can be overridden with the `kubeconfig` endpoint, 
+using `keyspace_annotation` and `db_name_annotation`.
 
 The role names are designed such that they can support a vault policy as follows:
 

@@ -39,13 +39,21 @@ func pathKubeconfig(b *databaseBackend) []*framework.Path {
 				},
 				Required: true,
 			},
-			"annotation_key": {
+			"keyspace_annotation": {
 				Type:        framework.TypeString,
-				Description: "Annotation key to look for in service accounts, where the value is interpolated into roles.",
+				Description: "Keyspace annotation to look for in service accounts, where the value is interpolated into the base role.",
 				DisplayAttrs: &framework.DisplayAttributes{
-					Name: "Annotation key",
+					Name: "Keyspace Annotation",
 				},
 				Default: "monzo.com/keyspace",
+			},
+			"db_name_annotation": {
+				Type:        framework.TypeString,
+				Description: "Database name to look for in service accounts, where the value (if set) overrides the value in the base role.",
+				DisplayAttrs: &framework.DisplayAttributes{
+					Name: "Database Name Annotation",
+				},
+				Default: "monzo.com/cluster",
 			},
 		},
 		Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -88,9 +96,10 @@ func (b *databaseBackend) pathKubeconfigRead() framework.OperationFunc {
 			// Create a map of data to be returned
 			resp := &logical.Response{
 				Data: map[string]interface{}{
-					"kubernetes_host":    config.Host,
-					"kubernetes_ca_cert": config.CACert,
-					"annotation_key":     config.AnnotationKey,
+					"kubernetes_host":     config.Host,
+					"kubernetes_ca_cert":  config.CACert,
+					"keyspace_annotation": config.KeyspaceAnnotation,
+					"db_name_annotation":  config.DBNameAnnotation,
 				},
 			}
 
@@ -116,12 +125,14 @@ func (b *databaseBackend) pathKubeconfigWrite() framework.OperationFunc {
 		if jwt == "" {
 			return logical.ErrorResponse("jwt must be set"), nil
 		}
-		annotationKey := data.Get("annotation_key").(string)
+		keyspaceAnnotationKey := data.Get("keyspace_annotation").(string)
+		dbNameAnnotationKey := data.Get("db_name_annotation").(string)
 		config := &kubeConfig{
-			Host:          host,
-			CACert:        caCert,
-			JWT:           jwt,
-			AnnotationKey: annotationKey,
+			Host:               host,
+			CACert:             caCert,
+			JWT:                jwt,
+			KeyspaceAnnotation: keyspaceAnnotationKey,
+			DBNameAnnotation:   dbNameAnnotationKey,
 		}
 
 		entry, err := logical.StorageEntryJSON(kubeconfigPath, config)
@@ -159,8 +170,10 @@ type kubeConfig struct {
 	CACert string `json:"ca_cert"`
 	// JWT is the bearer to use during the API call
 	JWT string `json:"jwt"`
-	// AnnotationKey is the annotation key to look for in service accounts
-	AnnotationKey string `json:"annotation_key"`
+	// KeyspaceAnnotation is the annotation key to look for in service accounts to interpolate into statements
+	KeyspaceAnnotation string `json:"keyspace_annotation"`
+	// DBNameAnnotation is the annotation key to look for in service accounts to override database name for a role
+	DBNameAnnotation string `json:"db_name_annotation"`
 }
 
 const confHelpSyn = `Configures the JWT Public Key and Kubernetes API information.`
