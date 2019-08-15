@@ -223,7 +223,7 @@ func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.
 		return nil, nil
 	}
 
-	annotation, err := b.getServiceAccountAnnotation(ctx, s, namespace, svcAccountName)
+	annotation, dbName, err := b.getServiceAccountAnnotations(ctx, s, namespace, svcAccountName)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +231,11 @@ func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.
 	if annotation == "" {
 		// no service account with an annotation found
 		return nil, nil
+	}
+
+	if dbName != "" {
+		// Override the default DB Name for the role
+		role.DBName = dbName
 	}
 
 	transformation := map[string]string{
