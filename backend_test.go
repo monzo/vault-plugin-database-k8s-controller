@@ -1107,17 +1107,19 @@ func TestBackend_k8sRoleCrud(t *testing.T) {
 		t.Fatalf("err:%s resp:%#v\n", err, resp)
 	}
 
-	// persist a service account -> annotation mapping
-	entry, err := logical.StorageEntryJSON("serviceaccount/default/s-ledger", "public")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := config.StorageView.Put(namespace.RootContext(nil), entry); err != nil {
-		t.Fatal(err)
-	}
+	// Test with both a blank db name annotation, and one set
+	dbNameAnnotations := []string{"", "foo"}
 
-	// Test role creation
-	{
+	for _, dbNameAnnotation := range dbNameAnnotations {
+		// persist a service account -> annotation mapping
+		entry, err := logical.StorageEntryJSON("serviceaccount/default/s-ledger", map[string]string{"keyspace": "public", "db_name": dbNameAnnotation})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := config.StorageView.Put(namespace.RootContext(nil), entry); err != nil {
+			t.Fatal(err)
+		}
+
 		data = map[string]interface{}{
 			"db_name":               "plugin-test",
 			"creation_statements":   testK8SRole,
@@ -1167,7 +1169,10 @@ func TestBackend_k8sRoleCrud(t *testing.T) {
 			t.Fatal(diff)
 		}
 
-		if diff := deep.Equal(resp.Data["db_name"], "plugin-test"); diff != nil {
+		if dbNameAnnotation == "" {
+			dbNameAnnotation = "plugin-test"
+		}
+		if diff := deep.Equal(resp.Data["db_name"], dbNameAnnotation); diff != nil {
 			t.Fatal(diff)
 		}
 		if diff := deep.Equal(resp.Data["default_ttl"], float64(300)); diff != nil {

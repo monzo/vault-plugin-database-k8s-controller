@@ -89,7 +89,7 @@ func (b *databaseBackend) getObjectAnnotations(keyspaceKey, dbNameKey string, ob
 		return "", "", errors.New(fmt.Sprintf("annotation %s did not match regex %s", keyspace, nameRegexStr))
 	}
 
-	dbName := annotations[keyspace]
+	dbName := annotations[dbNameKey]
 
 	return keyspace, dbName, nil
 }
@@ -142,8 +142,8 @@ func (b *databaseBackend) getServiceAccountAnnotations(ctx context.Context, s lo
 }
 
 type saCacheObject struct {
-	Keyspace string
-	DBName   string
+	Keyspace string `json:"keyspace"`
+	DBName   string `json:"db_name"`
 }
 
 // syncServiceAccounts lists all known service accounts to obtain a mapping of name to annotation
