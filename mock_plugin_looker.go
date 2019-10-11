@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hashicorp/vault/plugins/database/cassandra"
 	"github.com/hashicorp/vault/plugins/database/hana"
 	"github.com/hashicorp/vault/plugins/database/influxdb"
 	"github.com/hashicorp/vault/plugins/database/mongodb"
@@ -16,6 +15,7 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/consts"
 	"github.com/hashicorp/vault/sdk/helper/pluginutil"
 	"github.com/hashicorp/vault/sdk/helper/wrapping"
+	"github.com/monzo/vault-plugin-database-k8s-controller/cassandra"
 )
 
 // If you want more database plugins, you'll have to add them here.

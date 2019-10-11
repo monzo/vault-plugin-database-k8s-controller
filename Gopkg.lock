@@ -468,7 +468,7 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:6d0b57fe3f24d24efc771fb170899444ee5521872a41f61e2bcb08645f85dcdf"
+  digest = "1:2eaf4c840129bea1ff2c5b25fc2689431058a0b6f64fdf2c5988cd2392168c54"
   name = "github.com/hashicorp/vault"
   packages = [
     "api",
@@ -488,7 +488,6 @@
     "http",
     "physical/raft",
     "physical/raft/logstore",
-    "plugins/database/cassandra",
     "plugins/database/hana",
     "plugins/database/influxdb",
     "plugins/database/mongodb",
@@ -1201,6 +1200,7 @@
   input-imports = [
     "github.com/fatih/structs",
     "github.com/go-test/deep",
+    "github.com/gocql/gocql",
     "github.com/hashicorp/errwrap",
     "github.com/hashicorp/go-hclog",
     "github.com/hashicorp/go-multierror",
@@ -1210,7 +1210,6 @@
     "github.com/hashicorp/vault/helper/testhelpers/docker",
     "github.com/hashicorp/vault/helper/testhelpers/mongodb",
     "github.com/hashicorp/vault/http",
-    "github.com/hashicorp/vault/plugins/database/cassandra",
     "github.com/hashicorp/vault/plugins/database/hana",
     "github.com/hashicorp/vault/plugins/database/influxdb",
     "github.com/hashicorp/vault/plugins/database/mongodb",
@@ -1218,14 +1217,18 @@
     "github.com/hashicorp/vault/plugins/database/mysql",
     "github.com/hashicorp/vault/plugins/database/postgresql",
     "github.com/hashicorp/vault/sdk/database/dbplugin",
+    "github.com/hashicorp/vault/sdk/database/helper/connutil",
     "github.com/hashicorp/vault/sdk/database/helper/credsutil",
     "github.com/hashicorp/vault/sdk/database/helper/dbutil",
     "github.com/hashicorp/vault/sdk/framework",
+    "github.com/hashicorp/vault/sdk/helper/certutil",
     "github.com/hashicorp/vault/sdk/helper/consts",
     "github.com/hashicorp/vault/sdk/helper/dbtxn",
     "github.com/hashicorp/vault/sdk/helper/locksutil",
+    "github.com/hashicorp/vault/sdk/helper/parseutil",
     "github.com/hashicorp/vault/sdk/helper/pluginutil",
     "github.com/hashicorp/vault/sdk/helper/strutil",
+    "github.com/hashicorp/vault/sdk/helper/tlsutil",
     "github.com/hashicorp/vault/sdk/helper/wrapping",
     "github.com/hashicorp/vault/sdk/logical",
     "github.com/hashicorp/vault/sdk/plugin",
