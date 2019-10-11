@@ -3,7 +3,9 @@ A fork of Vault's database credential plugin allowing the use of an annotation o
 service accounts to dynamically specify user creation statements.
 
 Non-builtin database plugins are not supported, as sadly custom plugins cannot call out to other custom plugins.
-However, all of Vault's builtin database plugins are bundled into this binary and should work as normal.
+However, all of Vault's builtin database plugins are bundled into this binary and should work as normal. The Cassandra
+plugin is forked slightly, containing changes that have been upstreamed but are not yet in a stable release. This is
+temporary.
 
 Currently based on https://github.com/hashicorp/vault/tree/v1.2.3/builtin/logical/database
 
