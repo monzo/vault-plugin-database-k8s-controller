@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/vault/helper/consts"
 	"github.com/hashicorp/vault/helper/pluginutil"
 	"github.com/hashicorp/vault/helper/wrapping"
-	"github.com/hashicorp/vault/plugins/database/cassandra"
 	"github.com/hashicorp/vault/plugins/database/hana"
 	"github.com/hashicorp/vault/plugins/database/influxdb"
 	"github.com/hashicorp/vault/plugins/database/mongodb"
@@ -16,6 +15,7 @@ import (
 	"github.com/hashicorp/vault/plugins/database/mysql"
 	"github.com/hashicorp/vault/plugins/database/postgresql"
 	"github.com/hashicorp/vault/plugins/helper/database/credsutil"
+	"github.com/monzo/vault-plugin-database-k8s-controller/cassandra"
 )
 
 // If you want more database plugins, you'll have to add them here.
