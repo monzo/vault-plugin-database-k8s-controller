@@ -205,7 +205,7 @@ type upgradeCheck struct {
 // getKubernetesRoleEntry should be called if a role is prefixed with k8s_ and is not found in storage.
 // In this case, we should look up the underlying concrete role eg rw in k8s_rw_s-ledger_default, and
 // then look up the appropriate service account to interpolate its annotation into the creation statements.
-func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string) (*roleEntry, error) {
+func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string, pathPrefix string) (*roleEntry, error) {
 	// turn k8s_rw_default_s-ledger into [k8s, rw, s-ledger, default]
 	subs := strings.SplitN(name, "_", 4)
 	if len(subs) < 4 {
@@ -214,7 +214,7 @@ func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.
 
 	roleName, svcAccountName, namespace := subs[1], subs[2], subs[3]
 
-	role, err := b.Role(ctx, s, roleName)
+	role, err := b.roleAtPath(ctx, s, roleName, pathPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (b *databaseBackend) roleAtPath(ctx context.Context, s logical.Storage, rol
 	}
 	if entry == nil {
 		if strings.HasPrefix(roleName, "k8s_") {
-			return b.getKubernetesRoleEntry(ctx, s, roleName)
+			return b.getKubernetesRoleEntry(ctx, s, roleName, pathPrefix)
 		}
 		return nil, nil
 	}
