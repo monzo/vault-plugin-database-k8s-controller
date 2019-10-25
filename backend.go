@@ -206,10 +206,10 @@ type upgradeCheck struct {
 // In this case, we should look up the underlying concrete role eg rw in k8s_rw_s-ledger_default, and
 // then look up the appropriate service account to interpolate its annotation into the creation statements.
 func (b *databaseBackend) getKubernetesRoleEntry(ctx context.Context, s logical.Storage, name string, pathPrefix string) (*roleEntry, error) {
-	// turn k8s_rw_default_s-ledger into [k8s, rw, s-ledger, default]
+	// turn k8s_rw_s-ledger-default into [k8s, rw, s-ledger, default]
 	subs := strings.SplitN(name, "_", 4)
 	if len(subs) < 4 {
-		return nil, errors.New("k8s role name is malformed; must be in format k8s_role_namespace_service-account-name")
+		return nil, errors.New("k8s role name is malformed; must be in format k8s_role_service-account-name_namespace")
 	}
 
 	roleName, svcAccountName, namespace := subs[1], subs[2], subs[3]
