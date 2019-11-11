@@ -1,6 +1,10 @@
 # vault-plugin-database-k8s-controller
-A fork of Vault's database credential plugin allowing the use of an annotation on
-service accounts to dynamically specify user creation statements.
+A fork of Vault's database credential plugin allowing the use of an annotation on service accounts to dynamically
+specify user creation statements. Essentially, you can have many virtual 'roles' which each have tightly scoped
+database user creation statements, where the roles are in fact defined in Kubernetes. At Monzo we use this to allow
+for hundreds of Cassandra clients which each are allowed access to a single independent keyspace. Vault is not aware
+of individual services; simply logging in with your Kubernetes service account token is enough to get permission to
+issue the correct database credentials.
 
 Non-builtin database plugins are not supported, as sadly custom plugins cannot call out to other custom plugins.
 However, all of Vault's builtin database plugins are bundled into this binary and should work as normal. The Cassandra
