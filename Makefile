@@ -1,7 +1,9 @@
 UPSTREAM_TAG ?= v1.3.0
+GOOS ?= linux
+GOARCH ?= amd64
 
-build: database-k8s
-	go build -o database-k8s ./database-plugin
+build:
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o vault-plugin-database-k8s-controller-$(UPSTREAM_TAG)  ./database-plugin
 
 .PHONY: rebase
 rebase:
