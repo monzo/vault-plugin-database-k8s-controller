@@ -7,11 +7,9 @@ of individual services; simply logging in with your Kubernetes service account t
 issue the correct database credentials.
 
 Non-builtin database plugins are not supported, as sadly custom plugins cannot call out to other custom plugins.
-However, all of Vault's builtin database plugins are bundled into this binary and should work as normal. The Cassandra
-plugin is forked slightly, containing changes that have been upstreamed but are not yet in a stable release. This is
-temporary.
+However, all of Vault's builtin database plugins are bundled into this binary and should work as normal.
 
-Currently based on https://github.com/hashicorp/vault/tree/v1.2.3/builtin/logical/database
+Currently based on https://github.com/hashicorp/vault/tree/v1.3.0/builtin/logical/database
 
 To rebase:
 ```bash

@@ -1,4 +1,4 @@
-UPSTREAM_TAG ?= v1.2.3
+UPSTREAM_TAG ?= v1.3.0
 
 build: database-k8s
 	go build -o database-k8s ./database-plugin
