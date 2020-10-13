@@ -167,7 +167,7 @@ func (b *databaseBackend) syncServiceAccounts(ctx context.Context, req *logical.
 	for _, sa := range sas {
 		keyspace, dbName, err := b.getObjectAnnotations(config.KeyspaceAnnotation, config.DBNameAnnotation, sa)
 		if err != nil {
-			b.logger.Error("error getting annotation for object: %s", err)
+			b.logger.Error(fmt.Sprintf("error getting annotation for object: %v", err))
 			continue
 		}
 

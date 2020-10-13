@@ -1,4 +1,4 @@
-UPSTREAM_TAG ?= v1.3.0
+UPSTREAM_TAG ?= v1.3.1
 GOOS ?= linux
 GOARCH ?= amd64
 
