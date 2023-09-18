@@ -15,8 +15,8 @@ require (
 	github.com/lib/pq v1.2.0
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/ory/dockertest v3.3.4+incompatible
-	k8s.io/api v0.0.0-20191115135540-bbc9463b57e5
-	k8s.io/apimachinery v0.0.0-20191115015347-3c7067801da2
-	k8s.io/client-go v0.0.0-20191115215802-0a8a1d7b7fae
+	k8s.io/api v0.17.16
+	k8s.io/apimachinery v0.17.16
+	k8s.io/client-go v0.17.16
 	k8s.io/klog v1.0.0
 )
