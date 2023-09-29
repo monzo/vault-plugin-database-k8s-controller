@@ -1,4 +1,4 @@
-// +build !enterprise
+//go:build !enterprise
 
 package vault
 
@@ -10,15 +10,22 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func addPathCheckers(*Core, *MountEntry, logical.Backend, string)             {}
-func removePathCheckers(*Core, *MountEntry, string)                           {}
+func addPathCheckers(c *Core, entry *MountEntry, backend logical.Backend, viewPath string) {
+	c.addBackendWriteForwardedPaths(backend, viewPath)
+}
+
+func removePathCheckers(c *Core, entry *MountEntry, viewPath string) {
+	c.writeForwardedPaths.RemovePathPrefix(viewPath)
+}
+
 func addAuditPathChecker(*Core, *MountEntry, *BarrierView, string)            {}
 func removeAuditPathChecker(*Core, *MountEntry)                               {}
 func addFilterablePath(*Core, string)                                         {}
+func addKnownPath(*Core, string)                                              {}
 func preprocessMount(*Core, *MountEntry, *BarrierView) (bool, error)          { return false, nil }
 func clearIgnoredPaths(context.Context, *Core, logical.Backend, string) error { return nil }
 func addLicenseCallback(*Core, logical.Backend)                               {}
-func runFilteredPathsEvaluation(context.Context, *Core) error                 { return nil }
+func runFilteredPathsEvaluation(context.Context, *Core, bool) error           { return nil }
 
 // ViewPath returns storage prefix for the view
 func (e *MountEntry) ViewPath() string {
@@ -49,8 +56,13 @@ func verifyNamespace(*Core, *namespace.Namespace, *MountEntry) error { return ni
 func (c *Core) mountEntrySysView(entry *MountEntry) extendedSystemView {
 	return extendedSystemViewImpl{
 		dynamicSystemView{
-			core:       c,
-			mountEntry: entry,
+			core:        c,
+			mountEntry:  entry,
+			perfStandby: c.perfStandby,
 		},
 	}
+}
+
+func (c *Core) entBuiltinPluginMetrics(ctx context.Context, entry *MountEntry, val float32) error {
+	return nil
 }

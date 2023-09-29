@@ -10,8 +10,10 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/golang-sql/sqlexp"
+
 	// "github.com/cockroachdb/apd"
-	"cloud.google.com/go/civil"
+	"github.com/golang-sql/civil"
 )
 
 // Type alias provided for compatibility.
@@ -66,10 +68,10 @@ func convertInputParameter(val interface{}) (interface{}, error) {
 func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch v := nv.Value.(type) {
 	case sql.Out:
-		if c.outs == nil {
-			c.outs = make(map[string]interface{})
+		if c.outs.params == nil {
+			c.outs.params = make(map[string]interface{})
 		}
-		c.outs[nv.Name] = v.Dest
+		c.outs.params[nv.Name] = v.Dest
 
 		if v.Dest == nil {
 			return errors.New("destination is a nil pointer")
@@ -110,10 +112,14 @@ func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 		return nil
 	case *ReturnStatus:
 		*v = 0 // By default the return value should be zero.
-		c.returnStatus = v
+		c.outs.returnStatus = v
 		return driver.ErrRemoveArgument
-	case TVPType:
+	case TVP:
 		return nil
+	case *sqlexp.ReturnMessage:
+		sqlexp.ReturnMessageInit(v)
+		c.outs.msgq = v
+		return driver.ErrRemoveArgument
 	default:
 		var err error
 		nv.Value, err = convertInputParameter(nv.Value)
@@ -162,15 +168,27 @@ func (s *Stmt) makeParamExtra(val driver.Value) (res param, err error) {
 	case sql.Out:
 		res, err = s.makeParam(val.Dest)
 		res.Flags = fByRevValue
-	case TVPType:
+	case TVP:
 		err = val.check()
 		if err != nil {
 			return
 		}
-		res.ti.UdtInfo.TypeName = val.TVPTypeName
-		res.ti.UdtInfo.SchemaName = val.TVPScheme
+		schema, name, errGetName := getSchemeAndName(val.TypeName)
+		if errGetName != nil {
+			return
+		}
+		res.ti.UdtInfo.TypeName = name
+		res.ti.UdtInfo.SchemaName = schema
 		res.ti.TypeId = typeTvp
-		res.buffer, err = val.encode()
+		columnStr, tvpFieldIndexes, errCalTypes := val.columnTypes()
+		if errCalTypes != nil {
+			err = errCalTypes
+			return
+		}
+		res.buffer, err = val.encode(schema, name, columnStr, tvpFieldIndexes)
+		if err != nil {
+			return
+		}
 		res.ti.Size = len(res.buffer)
 
 	default:
@@ -181,4 +199,9 @@ func (s *Stmt) makeParamExtra(val driver.Value) (res param, err error) {
 
 func scanIntoOut(name string, fromServer, scanInto interface{}) error {
 	return convertAssign(scanInto, fromServer)
+}
+
+func isOutputValue(val driver.Value) bool {
+	_, out := val.(sql.Out)
+	return out
 }
