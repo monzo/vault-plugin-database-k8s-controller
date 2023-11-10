@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/denisenkom/go-mssqldb/internal/cp"
+	"github.com/denisenkom/go-mssqldb/internal/decimal"
 )
 
 // fixed-length data types
@@ -73,14 +74,10 @@ const (
 const _PLP_NULL = 0xFFFFFFFFFFFFFFFF
 const _UNKNOWN_PLP_LEN = 0xFFFFFFFFFFFFFFFE
 const _PLP_TERMINATOR = 0x00000000
-const _TVP_NULL_TOKEN = 0xffff
 
 // TVP COLUMN FLAGS
-const _TVP_COLUMN_DEFAULT_FLAG = 0x200
 const _TVP_END_TOKEN = 0x00
 const _TVP_ROW_TOKEN = 0x01
-const _TVP_ORDER_UNIQUE_TOKEN = 0x10
-const _TVP_COLUMN_ORDERING_TOKEN = 0x11
 
 // TYPE_INFO rule
 // http://msdn.microsoft.com/en-us/library/dd358284.aspx
@@ -668,7 +665,7 @@ func readPLPType(ti *typeInfo, r *tdsBuffer) interface{} {
 	default:
 		buf = bytes.NewBuffer(make([]byte, 0, size))
 	}
-	for true {
+	for {
 		chunksize := r.uint32()
 		if chunksize == 0 {
 			break
@@ -693,6 +690,10 @@ func readPLPType(ti *typeInfo, r *tdsBuffer) interface{} {
 }
 
 func writePLPType(w io.Writer, ti typeInfo, buf []byte) (err error) {
+	if buf == nil {
+		err = binary.Write(w, binary.LittleEndian, uint64(_PLP_NULL))
+		return
+	}
 	if err = binary.Write(w, binary.LittleEndian, uint64(_UNKNOWN_PLP_LEN)); err != nil {
 		return
 	}
@@ -810,7 +811,6 @@ func readVarLen(ti *typeInfo, r *tdsBuffer) {
 	default:
 		badStreamPanicf("Invalid type %d", ti.TypeId)
 	}
-	return
 }
 
 func decodeMoney(buf []byte) []byte {
@@ -822,12 +822,12 @@ func decodeMoney(buf []byte) []byte {
 		uint64(buf[1])<<40 |
 		uint64(buf[2])<<48 |
 		uint64(buf[3])<<56)
-	return scaleBytes(strconv.FormatInt(money, 10), 4)
+	return decimal.ScaleBytes(strconv.FormatInt(money, 10), 4)
 }
 
 func decodeMoney4(buf []byte) []byte {
 	money := int32(binary.LittleEndian.Uint32(buf[0:4]))
-	return scaleBytes(strconv.FormatInt(int64(money), 10), 4)
+	return decimal.ScaleBytes(strconv.FormatInt(int64(money), 10), 4)
 }
 
 func decodeGuid(buf []byte) []byte {
@@ -837,17 +837,15 @@ func decodeGuid(buf []byte) []byte {
 }
 
 func decodeDecimal(prec uint8, scale uint8, buf []byte) []byte {
-	var sign uint8
-	sign = buf[0]
-	dec := Decimal{
-		positive: sign != 0,
-		prec:     prec,
-		scale:    scale,
-	}
+	sign := buf[0]
+	var dec decimal.Decimal
+	dec.SetPositive(sign != 0)
+	dec.SetPrec(prec)
+	dec.SetScale(scale)
 	buf = buf[1:]
 	l := len(buf) / 4
 	for i := 0; i < l; i++ {
-		dec.integer[i] = binary.LittleEndian.Uint32(buf[0:4])
+		dec.SetInteger(binary.LittleEndian.Uint32(buf[0:4]), uint8(i))
 		buf = buf[4:]
 	}
 	return dec.Bytes()
@@ -1190,8 +1188,8 @@ func makeDecl(ti typeInfo) string {
 	case typeBigChar, typeChar:
 		return fmt.Sprintf("char(%d)", ti.Size)
 	case typeBigVarChar, typeVarChar:
-		if ti.Size > 4000 || ti.Size == 0 {
-			return fmt.Sprintf("varchar(max)")
+		if ti.Size > 8000 || ti.Size == 0 {
+			return "varchar(max)"
 		} else {
 			return fmt.Sprintf("varchar(%d)", ti.Size)
 		}
@@ -1466,7 +1464,7 @@ func makeGoLangTypeLength(ti typeInfo) (int64, bool) {
 	case typeVariant:
 		return 0, false
 	case typeBigBinary:
-		return 0, false
+		return int64(ti.Size), true
 	default:
 		panic(fmt.Sprintf("not implemented makeGoLangTypeLength for type %d", ti.TypeId))
 	}

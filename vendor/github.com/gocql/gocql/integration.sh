@@ -6,6 +6,7 @@ function run_tests() {
 	local clusterSize=3
 	local version=$1
 	local auth=$2
+	local compressor=$3
 
 	if [ "$auth" = true ]; then
 		clusterSize=1
@@ -64,7 +65,7 @@ function run_tests() {
 	ccm status
 	ccm node1 nodetool status
 
-	local args="-gocql.timeout=60s -runssl -proto=$proto -rf=3 -clusterSize=$clusterSize -autowait=2000ms -compressor=snappy -gocql.cversion=$version -cluster=$(ccm liveset) ./..."
+	local args="-gocql.timeout=60s -runssl -proto=$proto -rf=3 -clusterSize=$clusterSize -autowait=2000ms -compressor=$compressor -gocql.cversion=$version -cluster=$(ccm liveset) ./..."
 
 	go test -v -tags unit -race
 
@@ -75,10 +76,15 @@ function run_tests() {
 	else
 		sleep 1s
 		go test -tags "cassandra gocql_debug" -timeout=5m -race $args
+
+		ccm clear
+		ccm start --wait-for-binary-proto
+		sleep 1s
+
 		go test -tags "integration gocql_debug" -timeout=5m -race $args
 
 		ccm clear
-		ccm start
+		ccm start --wait-for-binary-proto
 		sleep 1s
 
 		go test -tags "ccm gocql_debug" -timeout=5m -race $args
@@ -87,4 +93,4 @@ function run_tests() {
 	ccm remove
 }
 
-run_tests $1 $2
+run_tests $1 $2 $3

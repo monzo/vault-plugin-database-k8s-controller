@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	// Ensure we use a high-entropy seed for the psuedo-random generator
+	// Ensure we use a high-entropy seed for the pseudo-random generator
 	rand.Seed(newSeed())
 }
 
@@ -32,7 +32,7 @@ func randomTimeout(minVal time.Duration) <-chan time.Time {
 	if minVal == 0 {
 		return nil
 	}
-	extra := (time.Duration(rand.Int63()) % minVal)
+	extra := time.Duration(rand.Int63()) % minVal
 	return time.After(minVal + extra)
 }
 
@@ -96,6 +96,25 @@ func asyncNotifyBool(ch chan bool, v bool) {
 	}
 }
 
+// overrideNotifyBool is used to notify on a bool channel
+// but override existing value if value is present.
+// ch must be 1-item buffered channel.
+//
+// This method does not support multiple concurrent calls.
+func overrideNotifyBool(ch chan bool, v bool) {
+	select {
+	case ch <- v:
+		// value sent, all done
+	case <-ch:
+		// channel had an old value
+		select {
+		case ch <- v:
+		default:
+			panic("race: channel was sent concurrently")
+		}
+	}
+}
+
 // Decode reverses the encode operation on a byte slice input.
 func decodeMsgPack(buf []byte, out interface{}) error {
 	r := bytes.NewBuffer(buf)
@@ -121,6 +140,23 @@ func backoff(base time.Duration, round, limit uint64) time.Duration {
 	for power > 2 {
 		base *= 2
 		power--
+	}
+	return base
+}
+
+// cappedExponentialBackoff computes the exponential backoff with an adjustable
+// cap on the max timeout.
+func cappedExponentialBackoff(base time.Duration, round, limit uint64, cap time.Duration) time.Duration {
+	power := min(round, limit)
+	for power > 2 {
+		if base > cap {
+			return cap
+		}
+		base *= 2
+		power--
+	}
+	if base > cap {
+		return cap
 	}
 	return base
 }
