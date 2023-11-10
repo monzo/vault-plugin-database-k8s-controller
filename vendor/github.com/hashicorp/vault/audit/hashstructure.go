@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/hashicorp/go-secure-stdlib/strutil"
 	"github.com/hashicorp/vault/sdk/helper/salt"
-	"github.com/hashicorp/vault/sdk/helper/strutil"
 	"github.com/hashicorp/vault/sdk/helper/wrapping"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/mitchellh/copystructure"
@@ -65,46 +65,46 @@ func HashRequest(salter *salt.Salt, in *logical.Request, HMACAccessor bool, nonH
 		req.ClientTokenAccessor = fn(req.ClientTokenAccessor)
 	}
 
-	data, err := hashMap(fn, req.Data, nonHMACDataKeys)
-	if err != nil {
-		return nil, err
+	if req.Data != nil {
+		copy, err := copystructure.Copy(req.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		err = hashMap(fn, copy.(map[string]interface{}), nonHMACDataKeys)
+		if err != nil {
+			return nil, err
+		}
+		req.Data = copy.(map[string]interface{})
 	}
 
-	req.Data = data
 	return &req, nil
 }
 
-func hashMap(fn func(string) string, data map[string]interface{}, nonHMACDataKeys []string) (map[string]interface{}, error) {
-	if data == nil {
-		return nil, nil
-	}
-
-	copy, err := copystructure.Copy(data)
-	if err != nil {
-		return nil, err
-	}
-	newData := copy.(map[string]interface{})
-	for k, v := range newData {
+func hashMap(fn func(string) string, data map[string]interface{}, nonHMACDataKeys []string) error {
+	for k, v := range data {
 		if o, ok := v.(logical.OptMarshaler); ok {
 			marshaled, err := o.MarshalJSONWithOptions(&logical.MarshalOptions{
 				ValueHasher: fn,
 			})
 			if err != nil {
-				return nil, err
+				return err
 			}
-			newData[k] = json.RawMessage(marshaled)
+			data[k] = json.RawMessage(marshaled)
 		}
 	}
 
-	if err := HashStructure(newData, fn, nonHMACDataKeys); err != nil {
-		return nil, err
-	}
-
-	return newData, nil
+	return HashStructure(data, fn, nonHMACDataKeys)
 }
 
 // HashResponse returns a hashed copy of the logical.Request input.
-func HashResponse(salter *salt.Salt, in *logical.Response, HMACAccessor bool, nonHMACDataKeys []string) (*logical.Response, error) {
+func HashResponse(
+	salter *salt.Salt,
+	in *logical.Response,
+	HMACAccessor bool,
+	nonHMACDataKeys []string,
+	elideListResponseData bool,
+) (*logical.Response, error) {
 	if in == nil {
 		return nil, nil
 	}
@@ -124,11 +124,30 @@ func HashResponse(salter *salt.Salt, in *logical.Response, HMACAccessor bool, no
 		}
 	}
 
-	data, err := hashMap(fn, resp.Data, nonHMACDataKeys)
-	if err != nil {
-		return nil, err
+	if resp.Data != nil {
+		copy, err := copystructure.Copy(resp.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		mapCopy := copy.(map[string]interface{})
+		if b, ok := mapCopy[logical.HTTPRawBody].([]byte); ok {
+			mapCopy[logical.HTTPRawBody] = string(b)
+		}
+
+		// Processing list response data elision takes place at this point in the code for performance reasons:
+		// - take advantage of the deep copy of resp.Data that was going to be done anyway for hashing
+		// - but elide data before potentially spending time hashing it
+		if elideListResponseData {
+			doElideListResponseData(mapCopy)
+		}
+
+		err = hashMap(fn, mapCopy, nonHMACDataKeys)
+		if err != nil {
+			return nil, err
+		}
+		resp.Data = mapCopy
 	}
-	resp.Data = data
 
 	if resp.WrapInfo != nil {
 		var err error

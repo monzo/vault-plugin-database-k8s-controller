@@ -1,10 +1,11 @@
 module github.com/denisenkom/go-mssqldb
 
-go 1.12
+go 1.13
 
 require (
-	cloud.google.com/go v0.37.4
-	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/yaml.v2 v2.2.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.19.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.11.0
+	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe
+	github.com/golang-sql/sqlexp v0.1.0
+	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 )
